@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Star Enhancer — night-sky photo cleanup (WASM)</title>
+<style>
+  :root { --bg:#0a0e1a; --panel:#121829; --line:#26304a; --txt:#dce3f5; --mut:#8794b3; --acc:#5b8cff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:24px 20px 8px; text-align:center; }
+  h1 { margin:0; font-size:22px; letter-spacing:.3px; }
+  header p { margin:6px 0 0; color:var(--mut); font-size:13px; }
+  main { max-width:1200px; margin:0 auto; padding:20px; }
+  #drop { border:2px dashed var(--line); border-radius:14px; padding:48px 20px; text-align:center;
+          background:var(--panel); cursor:pointer; transition:.15s; }
+  #drop.hot { border-color:var(--acc); background:#16203a; }
+  #drop strong { color:var(--acc); }
+  #drop small { display:block; color:var(--mut); margin-top:8px; }
+  #status { text-align:center; min-height:22px; color:var(--mut); margin:14px 0; font-size:13px; }
+  #status.err { color:#ff7a7a; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+  @media(max-width:720px){ .grid{ grid-template-columns:1fr; } }
+  figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  figcaption { padding:10px 14px; font-size:13px; color:var(--mut); border-bottom:1px solid var(--line);
+               display:flex; justify-content:space-between; align-items:center; }
+  figure img { display:block; width:100%; height:auto; background:#000; }
+  .dl { color:var(--acc); text-decoration:none; font-weight:600; }
+  .dl:hover { text-decoration:underline; }
+  .controls { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin:16px 0 4px; }
+  .controls label { font-size:13px; color:var(--mut); display:flex; flex-direction:column; gap:4px; min-width:150px; }
+  .controls input { width:160px; }
+  button#redo { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:9px 18px;
+                font-size:14px; cursor:pointer; }
+  button#redo:disabled { opacity:.5; cursor:default; }
+  footer { text-align:center; color:var(--mut); font-size:12px; padding:24px 20px; line-height:1.8; }
+  footer a { color:var(--acc); text-decoration:none; }
+  footer a:hover { text-decoration:underline; }
+  .demo-title { text-align:center; color:var(--mut); font-size:13px; margin:22px 0 0; }
+  .spin { display:inline-block; width:13px; height:13px; border:2px solid var(--line);
+          border-top-color:var(--acc); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>✦ Star Enhancer</h1>
+  <p>Flatten light pollution · denoise · reveal stars. Runs fully in your browser via WebAssembly — nothing uploaded.</p>
+</header>
+<main>
+  <div id="drop">
+    <strong>Drop a photo here</strong> or click to pick
+    <small>any format (JPEG, PNG, WebP, HEIC*, TIFF, BMP…) · *HEIC may need conversion</small>
+    <input id="file" type="file" accept="image/*" hidden>
+  </div>
+
+  <div id="demo">
+    <p class="demo-title">Example — sample photo, before &amp; after</p>
+    <div class="grid">
+      <figure><figcaption>Before</figcaption><img src="IMG_6173.jpeg" alt="before enhancement" loading="lazy"></figure>
+      <figure><figcaption>After</figcaption><img src="IMG_6173-stars.jpeg" alt="after enhancement" loading="lazy"></figure>
+    </div>
+  </div>
+
+  <div class="controls" id="controls" style="display:none">
+    <label>Star lift <input id="kStars" type="range" min="0" max="3" step="0.1" value="1.3"><span id="vStars">1.3</span></label>
+    <label>Saturation <input id="kSat" type="range" min="1" max="2" step="0.05" value="1.15"><span id="vSat">1.15</span></label>
+    <label>Black point <input id="kBlack" type="range" min="10" max="50" step="1" value="30"><span id="vBlack">30</span></label>
+    <label>Stretch <input id="kStretch" type="range" min="1" max="8" step="0.5" value="3"><span id="vStretch">3</span></label>
+    <button id="redo">Re-enhance</button>
+  </div>
+
+  <div id="status">Loading WebAssembly engine…</div>
+
+  <div class="grid" id="grid" style="display:none">
+    <figure><figcaption>Original</figcaption><img id="imgOrig" alt="original"></figure>
+    <figure>
+      <figcaption><span>Enhanced</span><a id="dl" class="dl" download="enhanced.png">⬇ Download</a></figcaption>
+      <img id="imgOut" alt="enhanced">
+    </figure>
+  </div>
+</main>
+<footer>
+  numpy + Pillow compiled to WebAssembly (Pyodide). Same pipeline as the local <code>enhance.py</code>.<br>
+  Made with love from the Canary Islands 🇮🇨 by <a href="https://sejas.blog" target="_blank" rel="noopener">Antonio Sejas</a>
+</footer>
+
+<script type="module">
+import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.mjs";
+
+const $ = id => document.getElementById(id);
+const status = $("status");
+const setStatus = (msg, err=false) => { status.innerHTML = msg; status.className = err ? "err" : ""; };
+
+const PY = `
+import numpy as np, io
+from PIL import Image, ImageFilter
+
+MAXEDGE = 2600  # cap working resolution to stay within the WASM heap
+
+def pil(a):
+    return Image.fromarray(np.clip(a*255,0,255).astype(np.uint8))
+def luma(a):
+    return (0.2126*a[...,0]+0.7152*a[...,1]+0.0722*a[...,2])[...,None]
+def blur1(ch, sigma):           # blur a single-channel float array, low memory
+    im = Image.fromarray(np.clip(ch[...,0]*255,0,255).astype(np.uint8), "L")
+    return (np.asarray(im.filter(ImageFilter.GaussianBlur(sigma)),np.float32)/255.0)[...,None]
+
+def enhance(buf, k_stars=1.3, sat=1.15, black_pct=30.0, stretch=3.0):
+    img = Image.open(io.BytesIO(bytes(buf))).convert("RGB")
+    w, h = img.size
+    if max(w, h) > MAXEDGE:     # downscale big photos so the math fits in memory
+        s = MAXEDGE/max(w, h); w, h = round(w*s), round(h*s)
+        img = img.resize((w, h), Image.LANCZOS)
+    arr = np.asarray(img, np.float32)/255.0
+
+    # 1. flatten gradient (downsample->blur->upsample)
+    sw = 64; sh = max(1, round(64*h/w))
+    small = img.resize((sw, sh), Image.BILINEAR).filter(ImageFilter.GaussianBlur(8))
+    bg = np.asarray(small.resize((w, h), Image.BICUBIC), np.float32)/255.0
+    bg -= bg.mean(axis=(0,1), keepdims=True)
+    flat = np.clip(arr - 0.92*bg, 0.0, 1.0); del bg, arr
+
+    # 2. chroma denoise
+    lum = luma(flat); chroma = flat-lum
+    chroma_s = (np.asarray(pil(chroma+0.5).filter(ImageFilter.GaussianBlur(3.0)),np.float32)/255.0)-0.5
+    del chroma
+    flat = np.clip(lum+chroma_s, 0.0, 1.0); del lum
+
+    # 3. luma denoise, keep stars sharp
+    lum2 = luma(flat)
+    lum_blur = blur1(lum2, 1.2)
+    keep = np.clip(np.abs(lum2-lum_blur)*18.0, 0.0, 1.0)
+    flat = np.clip(flat*keep + (lum_blur+(flat-lum2))*(1-keep), 0.0, 1.0)
+    del lum2, lum_blur, keep
+
+    # 4. star-pop
+    lum3 = luma(flat)
+    local = blur1(lum3, 6.0)
+    stars = np.clip(lum3-local, 0.0, 1.0); del lum3, local
+    flat = np.clip(flat + stars*k_stars, 0.0, 1.0); del stars
+
+    # 5. black point + asinh stretch
+    black = np.percentile(flat, black_pct)
+    flat = np.clip((flat-black)/(1-black), 0.0, 1.0)
+    a = float(stretch)
+    st = np.arcsinh(flat*a)/np.arcsinh(a)
+    flat = 0.4*st + 0.6*flat; del st
+
+    # 6. mild saturation
+    lum4 = luma(flat)
+    flat = np.clip(lum4 + (flat-lum4)*sat, 0.0, 1.0); del lum4
+
+    out = io.BytesIO()
+    pil(flat).save(out, format="PNG")
+    return out.getvalue()
+`;
+
+let pyodide, enhanceFn, lastBytes = null;
+
+(async () => {
+  pyodide = await loadPyodide();
+  setStatus("Loading numpy + Pillow (WASM)… <span class='spin'></span>");
+  await pyodide.loadPackage(["numpy", "Pillow"]);
+  pyodide.runPython(PY);
+  enhanceFn = pyodide.globals.get("enhance");
+  setStatus("Ready — drop or pick a photo.");
+})().catch(e => setStatus("Engine failed to load: " + e, true));
+
+async function run(bytes) {
+  if (!enhanceFn) return;
+  lastBytes = bytes;
+  $("imgOrig").src = URL.createObjectURL(new Blob([bytes]));
+  $("demo").style.display = "none";
+  $("grid").style.display = "grid";
+  $("controls").style.display = "flex";
+  setStatus("Enhancing… <span class='spin'></span>");
+  $("redo").disabled = true;
+  await new Promise(r => setTimeout(r, 30)); // let UI paint
+  try {
+    const t0 = performance.now();
+    const res = enhanceFn(
+      pyodide.toPy(bytes),
+      parseFloat($("kStars").value),
+      parseFloat($("kSat").value),
+      parseFloat($("kBlack").value),
+      parseFloat($("kStretch").value),
+    );
+    const outBytes = res.toJs();
+    res.destroy();
+    const url = URL.createObjectURL(new Blob([outBytes], {type:"image/png"}));
+    $("imgOut").src = url;
+    $("dl").href = url;
+    setStatus(`Done in ${((performance.now()-t0)/1000).toFixed(1)}s.`);
+  } catch (e) {
+    setStatus("Could not process this image: " + e, true);
+  }
+  $("redo").disabled = false;
+}
+
+// file input + drag/drop
+const drop = $("drop"), file = $("file");
+drop.onclick = () => file.click();
+file.onchange = e => { const f = e.target.files[0]; if (f) f.arrayBuffer().then(b => run(new Uint8Array(b))); };
+["dragover","dragenter"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) f.arrayBuffer().then(b => run(new Uint8Array(b)));
+});
+
+// live slider labels + re-enhance
+["Stars","Sat","Black","Stretch"].forEach(k => {
+  const inp = $("k"+k), out = $("v"+k);
+  inp.addEventListener("input", () => out.textContent = inp.value);
+});
+$("redo").onclick = () => { if (lastBytes) run(lastBytes); };
+</script>
+</body>
+</html>
