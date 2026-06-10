@@ -2,7 +2,7 @@
 
 Browser-based night-sky photo enhancer. Drop a photo, get cleaner stars — runs **fully in your browser** via WebAssembly. Nothing is uploaded.
 
-**Live demo:** https://sejas.github.io/stargazing-improve-pictures/
+**Live demo:** https://sejas.github.io/star-enhancer/
 
 ![Before and after](IMG_6173-stars.jpeg)
 
