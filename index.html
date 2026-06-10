@@ -12,9 +12,9 @@
   }
   * { box-sizing:border-box; }
   body { margin:0; font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-         background:var(--bg); color:var(--txt); }
-  /* subtle starfield */
-  body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.95; z-index:0;
+         background:var(--bg); color:var(--txt); position:relative; min-height:100vh; }
+  /* subtle starfield — absolute (not fixed) so it spans the full document, no viewport seam */
+  body::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.95; z-index:0;
     background-image:
       radial-gradient(1100px 520px at 50% -100px, rgba(110,162,255,.32), transparent 70%),
       radial-gradient(700px 700px at 94% 70%, rgba(155,123,255,.18), transparent 70%),
@@ -25,6 +25,18 @@
       radial-gradient(2.5px 2.5px at 97% 90%, #ffffff 50%, transparent 51%),
       radial-gradient(2px 2px at 3% 47%, #e6eeff 50%, transparent 51%),
       radial-gradient(2px 2px at 98% 64%, #ffffff 50%, transparent 51%),
+      radial-gradient(600px 500px at 2% 72%, rgba(110,162,255,.12), transparent 70%),
+      radial-gradient(600px 500px at 98% 52%, rgba(155,123,255,.12), transparent 70%),
+      radial-gradient(1300px 520px at 50% 92%, rgba(155,123,255,.30), transparent 70%),
+      radial-gradient(800px 300px at 38% 99%, rgba(110,162,255,.18), transparent 70%),
+      radial-gradient(1.5px 1.5px at 6% 56%, #cfe0ff 50%, transparent 51%),
+      radial-gradient(2px 2px at 5% 88%, #ffffff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 95% 47%, #cfe0ff 50%, transparent 51%),
+      radial-gradient(2px 2px at 93% 76%, #e6eeff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 2% 36%, #ffffff 50%, transparent 51%),
+      radial-gradient(2.5px 2.5px at 96% 22%, #ffffff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 8% 97%, #cfe0ff 50%, transparent 51%),
+      radial-gradient(2px 2px at 90% 95%, #ffffff 50%, transparent 51%),
       radial-gradient(1px 1px at 12% 18%, #cfe0ff 50%, transparent 51%),
       radial-gradient(1.5px 1.5px at 38% 9%,  #ffffff 50%, transparent 51%),
       radial-gradient(1px 1px at 67% 24%, #cfe0ff 50%, transparent 51%),
@@ -94,18 +106,20 @@
   .how { max-width:620px; margin:10px auto 0; }
   .how details { background:var(--panel); border:1px solid var(--line); border-radius:12px;
                  font-size:14px; text-align:left; }
-  .how summary { list-style:none; cursor:pointer; padding:13px 18px; font-weight:600; color:var(--mut);
-                 display:flex; align-items:center; gap:11px; }
+  .how summary { list-style:none; cursor:pointer; padding:13px 18px 11px; font-weight:600; color:var(--mut);
+                 display:flex; align-items:center; gap:11px; flex-wrap:wrap; }
+  .how .teaser { flex-basis:100%; margin:4px 0 0 18px; font-weight:400; font-size:12.5px; color:var(--faint); }
+  .how details[open] .teaser { display:none; }
   .how summary::-webkit-details-marker { display:none; }
   .how summary::before { content:""; width:7px; height:7px; flex:none;
                          border-right:2px solid var(--faint); border-bottom:2px solid var(--faint);
                          transform:rotate(-45deg); transition:transform .15s; }
   .how details[open] summary::before { transform:rotate(45deg); }
   .how .tags { margin-left:14px; display:flex; gap:6px; }
-  .how .tag { font-size:11.5px; font-weight:600; color:#bcd2ff; background:rgba(110,162,255,.10);
-              border:1px solid rgba(110,162,255,.3); border-radius:999px; padding:2px 9px; white-space:nowrap;
-              text-decoration:none; }
-  a.tag:hover { border-color:var(--acc); color:#dce8ff; }
+  .how .tag { font-size:11.5px; font-weight:600; color:#9fb0d6; background:rgba(141,156,194,.08);
+              border:0; border-radius:999px; padding:3px 10px; white-space:nowrap; text-decoration:none; }
+  .how a.tag { color:var(--acc); background:rgba(110,162,255,.12); border:1px solid rgba(110,162,255,.45); }
+  .how a.tag:hover { border-color:var(--acc); color:#dce8ff; }
   .how .body { padding:0 18px 15px; line-height:1.75; color:var(--faint); }
   .how .body a { color:var(--acc); text-decoration:none; font-weight:600; }
   .how .body a:hover { text-decoration:underline; }
@@ -122,15 +136,25 @@
   .compare img { display:block; width:100%; height:auto; pointer-events:none; }
   .compare.demo { aspect-ratio:16/10; }
   .compare.demo img { height:100%; object-fit:cover; object-position:50% 22%; }
-  .badge.r.glow { color:#0b1224; background:linear-gradient(92deg,#cfe0ff,#aebfff); border-color:transparent;
-                  font-weight:800; }
+  .compare.demo .over img { filter:contrast(1.16) brightness(1.08); }
+  /* sodium-vapor light-pollution character on the BEFORE half */
+  .lp-haze { position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen;
+    background:
+      linear-gradient(to top, rgba(168,104,38,.55), rgba(168,104,38,.18) 32%, transparent 55%),
+      radial-gradient(1.5px 1.5px at 22% 38%, rgba(255,255,255,.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 41% 52%, rgba(255,255,255,.4) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 31% 64%, rgba(255,255,255,.42) 50%, transparent 51%),
+      radial-gradient(1px 1px at 14% 55%, rgba(255,255,255,.35) 50%, transparent 51%),
+      radial-gradient(1px 1px at 47% 71%, rgba(255,255,255,.3) 50%, transparent 51%); }
+  .badge.r.glow { color:#d9e4ff; background:rgba(20,25,60,.6); border:1px solid rgba(174,191,255,.65);
+                  font-weight:700; text-transform:none; letter-spacing:.3px; backdrop-filter:blur(4px); }
   .compare .over { position:absolute; inset:0; overflow:hidden; width:var(--pos,50%); }
   .compare .over img { max-width:none; position:absolute; left:0; top:0; object-fit:cover; }
-  .compare .handle { position:absolute; top:0; bottom:0; left:var(--pos,50%); width:2px; margin-left:-1px;
-                     background:rgba(255,255,255,.55); box-shadow:0 0 10px rgba(0,0,0,.5); }
+  .compare .handle { position:absolute; top:0; bottom:0; left:var(--pos,50%); width:1px; margin-left:-.5px;
+                     background:rgba(255,255,255,.38); box-shadow:0 0 8px rgba(170,195,255,.35); }
   .compare .handle::after { content:"‹ ›"; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
                             width:48px; height:48px; line-height:46px; text-align:center; border-radius:50%;
-                            background:linear-gradient(92deg,#cfe0ff,#aebfff); color:#0b1224; font-size:23px;
+                            background:linear-gradient(92deg,#c3d3f2,#a8b8e8); color:#0b1224; font-size:23px;
                             font-weight:800; letter-spacing:1px;
                             box-shadow:0 3px 18px rgba(0,0,0,.6), 0 0 0 3px rgba(11,18,36,.45); }
   .badge { position:absolute; top:12px; z-index:2; font-size:12.5px; font-weight:700; letter-spacing:.6px;
@@ -193,6 +217,7 @@
     <details>
       <summary>How it works &amp; why it's private
         <span class="tags"><span class="tag">WebAssembly</span><span class="tag">No upload</span><a class="tag" href="https://github.com/sejas/stargazing-improve-pictures" target="_blank" rel="noopener">Open source ↗</a></span>
+        <span class="teaser">Background extraction → star-safe denoise → star lift → asinh stretch — all in your browser tab.</span>
       </summary>
       <div class="body">
         Everything runs inside your browser tab: scientific image processing compiled to WebAssembly,
@@ -209,7 +234,7 @@
     <p class="sec-sub">A real handheld phone photo — drag the slider to compare</p>
     <div class="compare demo" id="demoCmp" style="--pos:34%">
       <img src="IMG_6173-demo.jpeg" alt="night sky after enhancement — stars revealed">
-      <div class="over"><img src="IMG_6173.jpeg" alt="night sky before enhancement — washed out by light pollution"></div>
+      <div class="over"><img src="IMG_6173.jpeg" alt="night sky before enhancement — washed out by light pollution"><span class="lp-haze" aria-hidden="true"></span></div>
       <div class="handle"></div>
       <span class="badge l">Before</span><span class="badge r glow">✦ After — stars revealed</span>
     </div>
